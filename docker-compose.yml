@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: computer_use_db
+    restart: always
+    environment:
+      POSTGRES_DB: computer_use_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: computer_use_backend
+    restart: always
+    ports:
+      - "8000:8000"
+      - "6080:6080"
+      - "5900:5900"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgrespassword@db:5432/computer_use_db
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DISPLAY=:1
+      - VNC_HOST=localhost
+      - VNC_PORT=6080
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
