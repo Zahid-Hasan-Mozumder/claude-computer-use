@@ -1,62 +1,133 @@
-import asyncio
-from typing import AsyncGenerator, Callable, Dict, List, Optional, Any
+import platform
+from datetime import datetime
+from typing import AsyncGenerator, Dict, List, Optional, Any, Literal
 from anthropic import AsyncAnthropic, APIError
 from app.agent.tools.collection import ToolCollection
 from app.core.config import settings
 
 COMPUTER_USE_BETA_FLAG = "computer-use-2024-10-22"
+PROMPT_CACHING_BETA_FLAG = "prompt-caching-2024-07-31"
+
+ThinkingMode = Literal["adaptive", "extended", "off"]
+ThinkingEffort = Literal["low", "medium", "high", "max"]
+
+SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITY>
+* You are utilising an Ubuntu virtual machine using {platform.machine()} architecture with internet access.
+* You can feel free to install Ubuntu applications with your bash tool. Use curl instead of wget.
+* To open firefox, please just click on the firefox icon.  Note, firefox-esr is what is installed on your system.
+* Using bash tool you can start GUI applications, but you need to set export DISPLAY=:1 and use a subshell. For example "(DISPLAY=:1 xterm &)". GUI apps run with bash tool will appear within your desktop environment, but they may take some time to appear. Take a screenshot to confirm it did.
+* When using your bash tool with commands that are expected to output very large quantities of text, redirect into a tmp file and use str_replace_editor or `grep -n -B <lines before> -A <lines after> <query> <filename>` to confirm output.
+* When viewing a page it can be helpful to zoom out so that you can see everything on the page.  Either that, or make sure you scroll down to see everything before deciding something isn't available.
+* When using your computer function calls, they take a while to run and send back to you.  Where possible/feasible, try to chain multiple of these calls all into one function calls request.
+* The current date is {datetime.today().strftime("%A, %B %d, %Y")}.
+</SYSTEM_CAPABILITY>
+
+<IMPORTANT>
+* When using Firefox, if a startup wizard appears, IGNORE IT.  Do not even click "skip this step".  Instead, click on the address bar where it says "Search or enter address", and enter the appropriate search term or URL there.
+* If the item you are looking at is a pdf, if after taking a single screenshot of the pdf it seems that you want to read the entire document instead of trying to continue to read the pdf from your screenshots + navigation, determine the URL, use curl to download the pdf, install and use pdftotext to convert it to a text file, and then read that text file directly with your str_replace_editor.
+</IMPORTANT>"""
 
 async def sampling_loop(
     messages: List[Dict[str, Any]],
     api_key: Optional[str] = None,
-    model: str = "claude-3-5-sonnet-20241022",
+    model: str = "claude-3-5-sonnet-latest",
     tools: Optional[ToolCollection] = None,
     max_tokens: int = 4096,
     max_steps: int = 15,
+    thinking_mode: ThinkingMode = "off",
+    thinking_effort: ThinkingEffort = "medium",
+    thinking_budget: Optional[int] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
-    Executes the Anthropic computer use agent sampling loop.
-    Yields structured stream events (text, tool_use, tool_result, screenshot, error, finished).
+    Executes the Anthropic computer use agent sampling loop adapted for FastAPI real-time streaming.
+    Yields structured stream events (status, text, tool_use, tool_result, error, finished).
     """
     key = api_key or settings.ANTHROPIC_API_KEY
     if not key:
-        yield {"type": "error", "error": "Anthropic API Key is missing. Please set ANTHROPIC_API_KEY env var."}
+        yield {"type": "error", "error": "Anthropic API Key is missing. Please set ANTHROPIC_API_KEY in your .env file."}
         return
 
     client = AsyncAnthropic(api_key=key)
     tool_collection = tools or ToolCollection()
     tool_params = tool_collection.to_params()
 
-    system_prompt = (
-        "You are an AI computer use assistant. You can control a desktop environment using "
-        "the computer tool, run terminal commands via bash, and view/edit files with str_replace_editor. "
-        "Complete user tasks step-by-step accurately."
-    )
-
     current_messages = list(messages)
     step_count = 0
 
+    # Model fallback queue
+    candidate_models = []
+    for m in [model, settings.DEFAULT_MODEL, "claude-sonnet-4-6", "claude-sonnet-5", "claude-sonnet-4-5-20250929", "claude-opus-4-6", "claude-3-5-sonnet-20241022", "claude-3-5-sonnet-latest", "claude-3-7-sonnet-20250219", "claude-3-opus-20240229"]:
+        if m and m not in candidate_models:
+            candidate_models.append(m)
+
+
+    selected_model = candidate_models[0]
+
+    # Extra body configuration for thinking mode
+    extra_body = {}
+    if thinking_mode == "adaptive":
+        extra_body = {
+            "thinking": {"type": "adaptive"},
+            "output_config": {"effort": thinking_effort},
+        }
+    elif thinking_mode == "extended" and thinking_budget:
+        extra_body = {
+            "thinking": {"type": "enabled", "budget_tokens": thinking_budget}
+        }
+
     while step_count < max_steps:
         step_count += 1
-        yield {"type": "status", "status": f"Step {step_count}/{max_steps}: Querying Claude..."}
+        yield {"type": "status", "status": f"Step {step_count}/{max_steps}: Querying Claude ({selected_model})..."}
 
-        try:
-            response = await client.beta.messages.create(
-                model=model,
-                max_tokens=max_tokens,
-                messages=current_messages,
-                system=system_prompt,
-                tools=tool_params,
-                betas=[COMPUTER_USE_BETA_FLAG],
+        response = None
+        last_exception = None
+
+        for m_try in candidate_models:
+            try:
+                betas = []
+                if "20241022" in m_try:
+                    betas.append(COMPUTER_USE_BETA_FLAG)
+
+                kwargs = {
+                    "model": m_try,
+                    "max_tokens": max_tokens,
+                    "messages": current_messages,
+                    "system": SYSTEM_PROMPT,
+                    "tools": tool_params,
+                }
+                if extra_body:
+                    kwargs["extra_body"] = extra_body
+
+                if betas:
+                    response = await client.beta.messages.create(betas=betas, **kwargs)
+                else:
+                    response = await client.messages.create(**kwargs)
+
+                selected_model = m_try
+                break
+
+
+            except APIError as e:
+                last_exception = e
+                if e.status_code == 404 or "not_found_error" in str(e):
+                    continue
+                else:
+                    yield {"type": "error", "error": f"Anthropic API Error: {str(e)}"}
+                    return
+            except Exception as e:
+                yield {"type": "error", "error": f"Unexpected Error: {str(e)}"}
+                return
+
+        if response is None:
+            err_msg = (
+                f"Anthropic API Error (404 Not Found): The provided ANTHROPIC_API_KEY in .env "
+                f"does not have access to Claude models or has expired/invalid permissions. "
+                f"Please update ANTHROPIC_API_KEY in your .env file with a valid key from https://console.anthropic.com."
             )
-        except APIError as e:
-            yield {"type": "error", "error": f"Anthropic API Error: {str(e)}"}
-            return
-        except Exception as e:
-            yield {"type": "error", "error": f"Unexpected Error: {str(e)}"}
+            yield {"type": "error", "error": err_msg}
             return
 
-        # Process response blocks
+        # Process response content blocks
         assistant_content = []
         tool_uses = []
 
