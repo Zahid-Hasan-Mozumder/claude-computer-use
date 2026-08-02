@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Computer Use Agent Control Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                        <line x1="8" y1="21" x2="16" y2="21"></line>
+                        <line x1="12" y1="17" x2="12" y2="21"></line>
+                    </svg>
+                    <span>Computer Use AI</span>
+                </div>
+                <button id="new-session-btn" class="btn btn-primary btn-sm">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    New Session
+                </button>
+            </div>
+            
+            <div class="sidebar-section-title">ACTIVE SESSIONS</div>
+            <div id="sessions-list" class="sessions-list">
+                <!-- Session items dynamically injected -->
+                <div class="loading-spinner">Loading sessions...</div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Bar -->
+            <header class="top-bar">
+                <div class="session-info">
+                    <h2 id="active-session-title">Select or Create a Session</h2>
+                    <span id="active-session-id" class="session-id-tag">ID: --</span>
+                </div>
+
+                <div class="top-bar-controls">
+                    <div class="status-badge" id="session-status-badge">
+                        <span class="status-dot"></span>
+                        <span id="status-text">Disconnected</span>
+                    </div>
+
+                    <div class="view-toggle-group">
+                        <button id="toggle-vnc-btn" class="btn btn-secondary btn-sm active">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                <line x1="8" y1="21" x2="16" y2="21"></line>
+                                <line x1="12" y1="17" x2="12" y2="21"></line>
+                            </svg>
+                            Desktop Viewer
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Workspace Body: Split View -->
+            <div class="workspace-grid">
+                <!-- Chat & Event Log Container -->
+                <section class="chat-container">
+                    <div id="chat-messages" class="chat-messages">
+                        <div class="welcome-card">
+                            <h3>🤖 Anthropic Computer Use Agent</h3>
+                            <p>Create a session to start controlling desktop environments, browsing the web, and running commands.</p>
+                        </div>
+                    </div>
+
+                    <!-- Input Box -->
+                    <div class="input-area">
+                        <form id="prompt-form" class="prompt-form">
+                            <textarea id="prompt-input" placeholder="Type instructions for the computer agent... (e.g., 'Open browser and search for weather')" rows="2" disabled></textarea>
+                            <div class="input-actions">
+                                <button type="button" id="stop-btn" class="btn btn-danger" disabled>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="6" y="6" width="12" height="12"></rect>
+                                    </svg>
+                                    Stop
+                                </button>
+                                <button type="submit" id="send-btn" class="btn btn-accent" disabled>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                    </svg>
+                                    Send
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- VNC / Screen Display Panel -->
+                <section class="vnc-container" id="vnc-panel">
+                    <div class="vnc-header">
+                        <span class="vnc-title">
+                            <span class="live-dot"></span> Virtual Machine Desktop (noVNC)
+                        </span>
+                        <div class="vnc-actions">
+                            <button id="refresh-vnc-btn" class="icon-btn" title="Refresh Screen">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M23 4v6h-6"></path>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="vnc-screen-wrapper">
+                        <iframe id="vnc-iframe" src="http://localhost:6080/vnc.html?autoplay=true&reconnect=true" title="noVNC Desktop Display"></iframe>
+                        <div class="canvas-stream-container" id="canvas-fallback-container">
+                            <img id="live-screenshot-img" src="" alt="Agent Virtual Screen Stream" style="display: none;">
+                            <div id="vnc-overlay-placeholder" class="vnc-placeholder">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                                </svg>
+                                <p>Desktop Screen Viewer</p>
+                                <small>Live tool screenshots & noVNC stream render here</small>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Create Session Modal -->
+    <div id="create-modal" class="modal-overlay">
+        <div class="modal-card">
+            <h3>Create Computer Use Session</h3>
+            <div class="form-group">
+                <label for="session-title-input">Session Title</label>
+                <input type="text" id="session-title-input" placeholder="e.g. Web Research Session" value="Computer Use Task">
+            </div>
+            <div class="form-group">
+                <label for="session-model-select">Claude Model</label>
+                <select id="session-model-select">
+                    <option value="claude-3-5-sonnet-20241022" selected>Claude 3.5 Sonnet (20241022)</option>
+                    <option value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet (Latest)</option>
+                    <option value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet</option>
+                    <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                </select>
+
+            </div>
+            <div class="modal-actions">
+                <button id="modal-cancel-btn" class="btn btn-secondary">Cancel</button>
+                <button id="modal-submit-btn" class="btn btn-primary">Create Session</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -129,8 +129,10 @@ class SessionManager:
                 screenshots = []
 
                 try:
-                    async for event in sampling_loop(messages=anthropic_messages):
+                    agent_model = db_sess.model if (db_sess and db_sess.model) else "claude-3-5-sonnet-20241022"
+                    async for event in sampling_loop(messages=anthropic_messages, model=agent_model):
                         event_type = event.get("type")
+
                         await self.broadcast(session_id, event)
 
                         if event_type == "text":
