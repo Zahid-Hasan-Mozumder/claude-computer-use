@@ -429,13 +429,17 @@ body {
     align-items: center;
     justify-content: center;
     background-color: #0B1120;
-    pointer-events: none;
+    padding: 12px;
+    z-index: 5;
 }
 
 #live-screenshot-img {
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 .vnc-placeholder {
@@ -446,6 +450,7 @@ body {
     color: var(--text-dim);
     text-align: center;
 }
+
 
 /* Buttons & Inputs */
 .btn {

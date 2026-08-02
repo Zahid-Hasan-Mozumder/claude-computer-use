@@ -6,8 +6,11 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
     
-    # Anthropic API Key
+    # Anthropic API Key & Model
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    DEFAULT_MODEL: str = os.getenv("DEFAULT_MODEL", "claude-sonnet-4-6")
+
+
     
     # Database Settings (PostgreSQL default with SQLite fallback for lightweight testing)
     DATABASE_URL: str = os.getenv(

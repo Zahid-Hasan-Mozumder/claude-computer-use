@@ -23,7 +23,9 @@ class MessageResponse(MessageBase):
 # --- Session Schemas ---
 class SessionCreate(BaseModel):
     title: Optional[str] = "New Session"
-    model: Optional[str] = "claude-3-5-sonnet-20241022"
+    model: Optional[str] = "claude-sonnet-4-6"
+
+
 
 class SessionUpdate(BaseModel):
     title: Optional[str] = None

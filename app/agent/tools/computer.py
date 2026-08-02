@@ -39,10 +39,31 @@ class ComputerTool(BaseAnthropicTool):
     def to_params(self) -> BetaToolUnionParam:
         return {
             "name": self.name,
-            "type": "computer_20241022",
-            "display_width_px": self.width,
-            "display_height_px": self.height,
-            "display_number": 1,
+            "description": "Control computer mouse, keyboard, and display screenshot.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "key", "type", "mouse_move", "left_click", "left_click_drag",
+                            "right_click", "middle_click", "double_click", "triple_click",
+                            "middle_click", "mouse_up", "screenshot", "cursor_position"
+                        ],
+                        "description": "Action to perform."
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Text to type or key to press."
+                    },
+                    "coordinate": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Coordinates [x, y] for mouse actions."
+                    }
+                },
+                "required": ["action"]
+            }
         }
 
     async def __call__(
