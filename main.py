@@ -1,6 +1,7 @@
-def main():
-    print("Hello from project!")
+from fastapi import FastAPI
 
+app = FastAPI()
 
-if __name__ == "__main__":
-    main()
+@app.get("/")
+def read_root():
+    return {"Hello from Zahid Hasan Mozumder!"}
