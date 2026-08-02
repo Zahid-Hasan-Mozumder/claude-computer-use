@@ -205,15 +205,25 @@ document.addEventListener("DOMContentLoaded", () => {
     function handleStreamEvent(data) {
         switch (data.type) {
             case "status":
+                const st = (data.status || "").toLowerCase();
                 updateStatusBadge(data.status);
-                if (data.status === "idle" || data.status === "stopped" || data.status === "error") {
+                if (st.includes("idle") || st.includes("completed") || st.includes("stopped") || st.includes("error")) {
                     stopBtnEl.disabled = true;
                     sendBtnEl.disabled = false;
-                } else if (data.status === "running") {
+                    promptInputEl.disabled = false;
+                } else if (st.includes("running") || st.includes("step")) {
                     stopBtnEl.disabled = false;
                     sendBtnEl.disabled = true;
+                    promptInputEl.disabled = true;
                 }
                 break;
+            case "finished":
+                updateStatusBadge("idle");
+                stopBtnEl.disabled = true;
+                sendBtnEl.disabled = false;
+                promptInputEl.disabled = false;
+                break;
+
             case "user_message":
                 appendUserBubble(data.content);
                 break;
