@@ -2,6 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let activeSessionId = null;
     let ws = null;
     let sessions = [];
+    let isVncServerAvailable = false;
 
     // DOM Elements
     const sessionsListEl = document.getElementById("sessions-list");
@@ -28,9 +29,29 @@ document.addEventListener("DOMContentLoaded", () => {
     const vncPlaceholderEl = document.getElementById("vnc-overlay-placeholder");
     const vncIframeEl = document.getElementById("vnc-iframe");
     const refreshVncBtnEl = document.getElementById("refresh-vnc-btn");
+    const canvasContainerEl = document.getElementById("canvas-fallback-container");
+
+    // Check if noVNC web server on port 6080 is reachable
+    async function checkVncAvailability() {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 1500);
+            await fetch("http://localhost:6080", { mode: "no-cors", signal: controller.signal });
+            clearTimeout(timeoutId);
+            isVncServerAvailable = true;
+            vncIframeEl.style.display = "block";
+        } catch (e) {
+            isVncServerAvailable = false;
+            vncIframeEl.style.display = "none";
+            if (canvasContainerEl) {
+                canvasContainerEl.style.zIndex = "10";
+            }
+        }
+    }
 
     // Fetch and list sessions
     async function loadSessions() {
+        await checkVncAvailability();
         try {
             const res = await fetch("/api/v1/sessions");
             sessions = await res.json();
@@ -102,6 +123,10 @@ document.addEventListener("DOMContentLoaded", () => {
         // Clear chat area
         chatMessagesEl.innerHTML = "";
 
+        // Reset desktop screen display
+        liveScreenshotImgEl.style.display = "none";
+        vncPlaceholderEl.style.display = "flex";
+
         // Load Message History
         await loadMessageHistory(sessionId);
 
@@ -124,6 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
+            let latestScreenshot = null;
             messages.forEach(msg => {
                 if (msg.role === "user") {
                     appendUserBubble(msg.content);
@@ -133,10 +159,14 @@ document.addEventListener("DOMContentLoaded", () => {
                         msg.tool_calls.forEach(tc => appendToolCard(tc));
                     }
                     if (msg.screenshots && msg.screenshots.length > 0) {
-                        updateLiveScreen(msg.screenshots[msg.screenshots.length - 1]);
+                        latestScreenshot = msg.screenshots[msg.screenshots.length - 1];
                     }
                 }
             });
+
+            if (latestScreenshot) {
+                updateLiveScreen(latestScreenshot);
+            }
             scrollToBottom();
         } catch (err) {
             console.error("Failed to load messages:", err);
@@ -215,9 +245,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function updateLiveScreen(base64Image) {
+        if (!base64Image) return;
         liveScreenshotImgEl.src = `data:image/png;base64,${base64Image}`;
         liveScreenshotImgEl.style.display = "block";
         vncPlaceholderEl.style.display = "none";
+        if (canvasContainerEl) {
+            canvasContainerEl.style.zIndex = "10";
+        }
     }
 
     function appendUserBubble(text) {
@@ -376,6 +410,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     refreshVncBtnEl.addEventListener("click", () => {
+        checkVncAvailability();
         if (vncIframeEl.src) {
             vncIframeEl.src = vncIframeEl.src;
         }

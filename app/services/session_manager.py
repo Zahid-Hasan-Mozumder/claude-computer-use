@@ -108,20 +108,12 @@ class SessionManager:
                     db_sess.status = "running"
                 await db.commit()
 
-                # Build Anthropic message thread
-                anthropic_messages = []
-                for m in history_messages:
-                    if m.role in ("user", "assistant"):
-                        msg_dict = {"role": m.role, "content": m.content or ""}
-                        if m.tool_calls:
-                            msg_dict["content"] = m.tool_calls
-                        anthropic_messages.append(msg_dict)
-
-                # Add new user prompt
-                anthropic_messages.append({"role": "user", "content": user_prompt})
+                # Build Anthropic message thread ensuring tool_use blocks are followed by matching tool_result blocks
+                anthropic_messages = self._build_anthropic_messages(history_messages, user_prompt)
 
                 # Broadcast user prompt event to subscribers
                 await self.broadcast(session_id, {"type": "user_message", "content": user_prompt})
+
 
                 # 3. Execute sampling loop with real-time event broadcasting
                 accumulated_text = ""
@@ -183,5 +175,49 @@ class SessionManager:
         res = await db.execute(stmt)
         return list(res.scalars().all())
 
+    def _build_anthropic_messages(self, history_messages: List[MessageModel], new_user_prompt: str) -> List[Dict[str, Any]]:
+
+        anthropic_messages = []
+        
+        for m in history_messages:
+            if m.role == "user":
+                if m.content:
+                    anthropic_messages.append({"role": "user", "content": m.content})
+            elif m.role == "assistant":
+                blocks = []
+                if m.content:
+                    blocks.append({"type": "text", "text": m.content})
+                
+                tool_ids = []
+                if m.tool_calls:
+                    for tc in m.tool_calls:
+                        tc_id = tc.get("id") or tc.get("tool_use_id")
+                        if tc_id:
+                            tool_ids.append(tc_id)
+                            blocks.append({
+                                "type": "tool_use",
+                                "id": tc_id,
+                                "name": tc.get("name"),
+                                "input": tc.get("input", {})
+                            })
+                
+                if blocks:
+                    anthropic_messages.append({"role": "assistant", "content": blocks})
+                
+                # Ensure tool_use blocks are immediately followed by corresponding tool_result blocks
+                if tool_ids:
+                    tool_result_blocks = []
+                    for tid in tool_ids:
+                        tool_result_blocks.append({
+                            "type": "tool_result",
+                            "tool_use_id": tid,
+                            "content": "Action completed successfully."
+                        })
+                    anthropic_messages.append({"role": "user", "content": tool_result_blocks})
+
+        anthropic_messages.append({"role": "user", "content": new_user_prompt})
+        return anthropic_messages
+
 # Global Singleton Instance
 session_manager = SessionManager()
+
