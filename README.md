@@ -1,88 +1,124 @@
-# Computer Use Agent Backend
+# Computer Use Agent AI - Control Center
 
-A scalable, production-ready backend for Anthropic Computer Use Agent session management built with **FastAPI**, **PostgreSQL**, **WebSockets / SSE**, **noVNC Virtual Desktop integration**, and **Docker**.
+A production-ready web application for **Anthropic Computer Use Agent** session control, built with **FastAPI**, **PostgreSQL**, **WebSockets**, **noVNC Desktop integration**, and **Docker**.
 
----
-
-## Features
-
-- **Session Management APIs**: RESTful endpoints to create, list, inspect, and delete agent sessions.
-- **Race-Condition-Free Concurrency**: In-memory async locking (`asyncio.Lock` per session) preventing simultaneous conflicting sampling loops.
-- **Database Persistence**: PostgreSQL / SQLAlchemy async models for full chat history, tool calls, and screenshots.
-- **Real-Time Progress Streaming**: Live streaming of tool execution, thoughts, screenshots, and status updates via WebSockets (`/ws/sessions/{id}`) and SSE (`/api/v1/sessions/{id}/stream`).
-- **VNC Screen Connection**: Embedded noVNC display server integration (`http://localhost:6080`) providing live visual desktop interaction.
-- **Interactive Control Dashboard**: Single-page web interface (`app/static/index.html`) with dark glassmorphism design.
-- **Docker Containerization**: Complete `Dockerfile` and `docker-compose.yml` for local development and remote deployment.
+Includes a side-by-side control dashboard featuring a live interactive **noVNC Linux Desktop**, **real-time progress streaming**, **segment screenshot analysis**, and a **dark glassmorphism theme**.
 
 ---
 
-## Tech Stack
+## 🚀 Quick Start with Docker (Recommended)
 
-- **Backend**: Python 3.12+, FastAPI, Uvicorn, SQLAlchemy (Async), Asyncpg, Anthropic Python SDK
-- **Database**: PostgreSQL
-- **Desktop Environment**: Xvfb, Openbox, x11vnc, noVNC, websockify
-- **Frontend**: HTML5, Vanilla JS, CSS3 (Glassmorphism design system)
+Follow these simple steps to clone the repository and run the full stack locally:
 
----
-
-## Getting Started
-
-### 1. Environment Setup
-
-Copy `.env.example` to `.env` and add your Anthropic API Key:
+### Step 1: Clone the Repository
 
 ```bash
-cp .env.example .env
+git clone https://github.com/Zahid-Hasan-Mozumder/claude-computer-use.git
+cd claude-computer-use
 ```
 
-Edit `.env`:
+### Step 2: Configure Environment Variables
+
+Create your `.env` configuration file from `.env.example`:
+
+```bash
+# On Linux/macOS
+cp .env.example .env
+
+# On Windows (PowerShell)
+copy .env.example .env
+```
+
+Open `.env` and set your **Anthropic API Key**:
+
 ```env
 ANTHROPIC_API_KEY=sk-ant-api03-...
-DATABASE_URL=postgresql+asyncpg://postgres:postgrespassword@localhost:5432/computer_use_db
 ```
 
----
+### Step 3: Run with Docker Compose
 
-### 2. Local Development with Docker Compose (Recommended)
-
-Run the full stack (FastAPI + PostgreSQL + Xvfb + noVNC):
+Build and launch all services (FastAPI Backend + PostgreSQL + Xvfb + tint2 Desktop + noVNC):
 
 ```bash
 docker-compose up --build
 ```
 
-Access services at:
-- **Web Control Dashboard**: [http://localhost:8000](http://localhost:8000)
-- **FastAPI OpenAPI Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **noVNC Desktop Viewer**: [http://localhost:6080/vnc.html](http://localhost:6080/vnc.html)
+> [!TIP]
+> To run containers in detached background mode:
+> ```bash
+> docker-compose up -d --build
+> ```
 
 ---
 
-### 3. Local Python Execution
+## 🌐 Application URLs
 
-Install dependencies:
+Once Docker Compose finishes starting up, access the application in your browser:
+
+| Service | Access URL | Description |
+| :--- | :--- | :--- |
+| **Control Dashboard** | [http://localhost:8000](http://localhost:8000) | Main split-view dashboard (Chat + Live noVNC) |
+| **API Documentation** | [http://localhost:8000/docs](http://localhost:8000/docs) | Interactive Swagger OpenAPI docs |
+| **noVNC Screen Viewer** | [http://localhost:6080/vnc.html](http://localhost:6080/vnc.html) | Direct full-screen noVNC desktop stream |
+
+---
+
+## 🎯 How to Use the Control Dashboard
+
+1. Open [http://localhost:8000](http://localhost:8000) in your browser.
+2. Click **`+ New Session`** on the top left sidebar and create a session.
+3. In the prompt input box at the bottom, type your instruction (e.g., `Open browser and search for weather`).
+4. Click **`Send`** (or press Enter).
+5. Watch the agent execute actions step-by-step:
+   - **Left Panel**: Real-time thoughts, step logs, and compact segment screenshot badges.
+   - **Right Panel**: Live interactive **noVNC Desktop Stream** (with taskbar, clock, Firefox browser, and mouse movements).
+
+---
+
+## 💻 Alternative: Running Locally without Docker (Python / uv)
+
+If you wish to run the FastAPI backend locally using `uv` or standard Python:
+
 ```bash
+# 1. Install dependencies
 uv sync
-```
 
-Run FastAPI server:
-```bash
+# 2. Set environment variables (PowerShell)
+$env:ANTHROPIC_API_KEY="sk-ant-api03-..."
+$env:PYTHONIOENCODING="utf-8"
+
+# 3. Start Uvicorn development server
 uv run uvicorn main:app --reload --port 8000
 ```
 
+> [!NOTE]
+> Running locally outside Docker streams virtual desktop screenshots in **Desktop Screen** mode. Running via Docker is recommended for the full interactive noVNC stream on port 6080.
+
 ---
 
-## API Reference
+## 🛑 Useful Docker Commands
 
-### Sessions
-- `POST /api/v1/sessions` - Create a new session.
-- `GET /api/v1/sessions` - List all active/past sessions.
-- `GET /api/v1/sessions/{session_id}` - Retrieve session details.
-- `DELETE /api/v1/sessions/{session_id}` - Delete session & clean resources.
-- `GET /api/v1/sessions/{session_id}/messages` - Fetch chat/event message history.
-- `POST /api/v1/sessions/{session_id}/messages` - Send instruction prompt to trigger background agent.
-- `POST /api/v1/sessions/{session_id}/stop` - Interrupt active task execution.
+```bash
+# Stop all running containers
+docker-compose down
 
-### Streaming & Real-Time
-- `WebSocket /ws/sessions/{session_id}` - Real-time event stream.
-- `GET /api/v1/sessions/{session_id}/stream` - Server-Sent Events (SSE) stream.
+# Stop containers and remove database volumes
+docker-compose down -v
+
+# View container logs in real time
+docker-compose logs -f backend
+
+# Rebuild containers from scratch
+docker-compose up --build --force-recreate
+```
+
+---
+
+## 🛠️ Features & Architecture
+
+- **Side-by-Side Control Center**: 50/50 split view with live noVNC desktop viewer.
+- **Segment Screenshot Analysis**: Computer agent captures screenshots after actions, analyzes layout, and reports findings.
+- **Race-Condition-Free Session Manager**: Concurrent session locks (`asyncio.Lock`) preventing conflicting sampling loops.
+- **Real-Time WebSockets**: Live progress streaming for thoughts, tool calls, and screenshots.
+- **Complete Desktop Environment**: Xvfb virtual framebuffer, Openbox window manager, tint2 taskbar panel, firefox-esr, xterm, x11vnc, and noVNC websockify.
+- **Persistence**: Async SQLAlchemy database persistence for chat history and tool results.

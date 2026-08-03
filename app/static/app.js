@@ -2,7 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let activeSessionId = null;
     let ws = null;
     let sessions = [];
-    let isVncServerAvailable = false;
+    let currentVncMode = "live"; // "live" or "screenshot"
 
     // DOM Elements
     const sessionsListEl = document.getElementById("sessions-list");
@@ -30,28 +30,96 @@ document.addEventListener("DOMContentLoaded", () => {
     const vncIframeEl = document.getElementById("vnc-iframe");
     const refreshVncBtnEl = document.getElementById("refresh-vnc-btn");
     const canvasContainerEl = document.getElementById("canvas-fallback-container");
+    const modeVncBtnEl = document.getElementById("mode-vnc-btn");
+    const modeScreenshotBtnEl = document.getElementById("mode-screenshot-btn");
+    const popoutVncBtnEl = document.getElementById("popout-vnc-btn");
+    const vncToastBannerEl = document.getElementById("vnc-toast-banner");
+    const vncTitleTextEl = document.getElementById("vnc-title-text");
 
-    // Check if noVNC web server on port 6080 is reachable
+    // Lightbox Elements
+    const lightboxModalEl = document.getElementById("lightbox-modal");
+    const lightboxImgEl = document.getElementById("lightbox-img");
+    const lightboxCaptionEl = document.getElementById("lightbox-caption");
+    const lightboxCloseBtnEl = document.getElementById("lightbox-close-btn");
+
+    // Check if noVNC on port 6080 is reachable
     async function checkVncAvailability() {
+        const host = window.location.hostname || "localhost";
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 1500);
-            await fetch("http://localhost:6080", { mode: "no-cors", signal: controller.signal });
+            const timeoutId = setTimeout(() => controller.abort(), 1000);
+            await fetch(`http://${host}:6080`, { mode: "no-cors", signal: controller.signal });
             clearTimeout(timeoutId);
-            isVncServerAvailable = true;
-            vncIframeEl.style.display = "block";
+            return true;
         } catch (e) {
-            isVncServerAvailable = false;
-            vncIframeEl.style.display = "none";
-            if (canvasContainerEl) {
-                canvasContainerEl.style.zIndex = "10";
-            }
+            return false;
         }
     }
 
-    // Fetch and list sessions
+    // Configure noVNC URL based on host and availability
+    async function initVncUrls() {
+        const host = window.location.hostname || "localhost";
+        const vncUrl = `http://${host}:6080/vnc.html?autoconnect=true&reconnect=true&resize=scale`;
+        if (vncIframeEl) {
+            vncIframeEl.src = vncUrl;
+        }
+        if (popoutVncBtnEl) {
+            popoutVncBtnEl.href = vncUrl;
+        }
+
+        const isVncUp = await checkVncAvailability();
+        if (isVncUp) {
+            setVncMode("live");
+        } else {
+            setVncMode("screenshot");
+        }
+    }
+
+    // Set VNC Mode (live noVNC vs desktop screen image stream)
+    function setVncMode(mode) {
+        currentVncMode = mode;
+        if (mode === "live") {
+            modeVncBtnEl.classList.add("active");
+            modeScreenshotBtnEl.classList.remove("active");
+            vncIframeEl.style.display = "block";
+            canvasContainerEl.style.display = "none";
+            if (vncTitleTextEl) vncTitleTextEl.textContent = "Virtual Machine Desktop (noVNC Live)";
+        } else {
+            modeScreenshotBtnEl.classList.add("active");
+            modeVncBtnEl.classList.remove("active");
+            vncIframeEl.style.display = "none";
+            canvasContainerEl.style.display = "flex";
+            if (vncTitleTextEl) vncTitleTextEl.textContent = "Virtual Machine Desktop (Live Screen Stream)";
+        }
+    }
+
+    modeVncBtnEl.addEventListener("click", async () => {
+        const isUp = await checkVncAvailability();
+        if (!isUp) {
+            showToast("noVNC server on port 6080 is offline. Run via Docker ('docker-compose up') for full noVNC.");
+        }
+        setVncMode("live");
+    });
+
+    modeScreenshotBtnEl.addEventListener("click", () => {
+        setVncMode("screenshot");
+    });
+
+    // Notification toast banner
+    let toastTimeout = null;
+    function showToast(msg) {
+        if (!vncToastBannerEl) return;
+        vncToastBannerEl.textContent = msg || "📸 Desktop screenshot updated";
+        vncToastBannerEl.style.display = "block";
+        if (toastTimeout) clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+            vncToastBannerEl.style.display = "none";
+        }, 3000);
+    }
+
+    // Load Sessions
     async function loadSessions() {
-        await checkVncAvailability();
+        initVncUrls();
         try {
             const res = await fetch("/api/v1/sessions");
             sessions = await res.json();
@@ -123,10 +191,6 @@ document.addEventListener("DOMContentLoaded", () => {
         // Clear chat area
         chatMessagesEl.innerHTML = "";
 
-        // Reset desktop screen display
-        liveScreenshotImgEl.style.display = "none";
-        vncPlaceholderEl.style.display = "flex";
-
         // Load Message History
         await loadMessageHistory(sessionId);
 
@@ -154,7 +218,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (msg.role === "user") {
                     appendUserBubble(msg.content);
                 } else if (msg.role === "assistant") {
-                    appendAssistantBubble(msg.content);
+                    if (msg.content) {
+                        appendAssistantBubble(msg.content);
+                    }
                     if (msg.tool_calls) {
                         msg.tool_calls.forEach(tc => appendToolCard(tc));
                     }
@@ -254,14 +320,21 @@ document.addEventListener("DOMContentLoaded", () => {
         statusTextEl.textContent = status.charAt(0).toUpperCase() + status.slice(1);
     }
 
+    // Update the right-side Desktop Viewer screen with screenshot
     function updateLiveScreen(base64Image) {
         if (!base64Image) return;
-        liveScreenshotImgEl.src = `data:image/png;base64,${base64Image}`;
+        const src = `data:image/png;base64,${base64Image}`;
+        liveScreenshotImgEl.src = src;
         liveScreenshotImgEl.style.display = "block";
-        vncPlaceholderEl.style.display = "none";
-        if (canvasContainerEl) {
-            canvasContainerEl.style.zIndex = "10";
+        if (vncPlaceholderEl) vncPlaceholderEl.style.display = "none";
+        
+        // Switch to desktop screen image container to show the screenshot
+        if (currentVncMode === "screenshot") {
+            canvasContainerEl.style.display = "flex";
+            vncIframeEl.style.display = "none";
         }
+
+        showToast("📸 Desktop Screen Updated");
     }
 
     function appendUserBubble(text) {
@@ -292,12 +365,45 @@ document.addEventListener("DOMContentLoaded", () => {
         currentAssistantBubble.textContent += text;
     }
 
+    function formatToolActionLabel(name, input) {
+        if (name === "computer") {
+            const action = input.action || "action";
+            const coord = input.coordinate ? `[${input.coordinate[0]}, ${input.coordinate[1]}]` : "";
+            const text = input.text ? `"${input.text}"` : "";
+
+            switch (action) {
+                case "left_click":
+                    return `🖱️ Left click ${coord}`;
+                case "right_click":
+                    return `🖱️ Right click ${coord}`;
+                case "double_click":
+                    return `🖱️ Double click ${coord}`;
+                case "mouse_move":
+                    return `📍 Move mouse to ${coord}`;
+                case "type":
+                    return `⌨️ Type ${text}`;
+                case "key":
+                    return `⌨️ Press Key ${text}`;
+                case "screenshot":
+                    return `📸 Capture Desktop Screenshot`;
+                default:
+                    return `🖥️ Computer: ${action} ${coord} ${text}`.trim();
+            }
+        } else if (name === "bash") {
+            const cmd = input.command ? `"${input.command.length > 40 ? input.command.substring(0, 37) + '...' : input.command}"` : "";
+            return `💻 Bash Command: ${cmd}`;
+        }
+        return `⚙️ Tool Use: ${name}`;
+    }
+
     function appendToolCard(data) {
         currentAssistantBubble = null;
         const card = document.createElement("div");
         card.className = "event-card tool_use";
+        
+        const label = formatToolActionLabel(data.name, data.input || {});
         card.innerHTML = `
-            <div class="event-header">⚙️ Tool Use: ${escapeHtml(data.name)}</div>
+            <div class="event-header">${escapeHtml(label)}</div>
             <div class="event-body">${escapeHtml(JSON.stringify(data.input || {}, null, 2))}</div>
         `;
         chatMessagesEl.appendChild(card);
@@ -306,17 +412,25 @@ document.addEventListener("DOMContentLoaded", () => {
     function appendToolResultCard(data) {
         const card = document.createElement("div");
         card.className = "event-card tool_result";
-        let content = data.output || data.error || "Tool action completed.";
-        card.innerHTML = `
-            <div class="event-header">✅ Tool Result</div>
-            <div class="event-body">${escapeHtml(content)}</div>
-        `;
+        let content = data.output || data.error || "Action completed.";
+        
+        let extraBadge = "";
         if (data.base64_image) {
-            const img = document.createElement("img");
-            img.src = `data:image/png;base64,${data.base64_image}`;
-            img.className = "event-img-preview";
-            card.appendChild(img);
+            extraBadge = `<div class="screenshot-inline-badge" title="Click to view desktop screenshot in full view">📸 Screenshot captured (Updated on Right Desktop Panel)</div>`;
         }
+
+        card.innerHTML = `
+            <div class="event-header">✅ Action Result</div>
+            <div class="event-body">${escapeHtml(content)}</div>
+            ${extraBadge}
+        `;
+
+        if (data.base64_image) {
+            card.querySelector(".screenshot-inline-badge")?.addEventListener("click", () => {
+                openLightbox(`data:image/png;base64,${data.base64_image}`, "Segment Desktop Screenshot");
+            });
+        }
+
         chatMessagesEl.appendChild(card);
     }
 
@@ -329,6 +443,28 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
         chatMessagesEl.appendChild(card);
     }
+
+    function openLightbox(imageSrc, caption) {
+        lightboxImgEl.src = imageSrc;
+        lightboxCaptionEl.textContent = caption || "Screenshot";
+        lightboxModalEl.classList.add("active");
+    }
+
+    lightboxCloseBtnEl.addEventListener("click", () => {
+        lightboxModalEl.classList.remove("active");
+    });
+
+    lightboxModalEl.addEventListener("click", (e) => {
+        if (e.target === lightboxModalEl) {
+            lightboxModalEl.classList.remove("active");
+        }
+    });
+
+    liveScreenshotImgEl.addEventListener("click", () => {
+        if (liveScreenshotImgEl.src) {
+            openLightbox(liveScreenshotImgEl.src, "Live Virtual Desktop Screen");
+        }
+    });
 
     function scrollToBottom() {
         chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
@@ -420,10 +556,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     refreshVncBtnEl.addEventListener("click", () => {
-        checkVncAvailability();
-        if (vncIframeEl.src) {
-            vncIframeEl.src = vncIframeEl.src;
-        }
+        const host = window.location.hostname || "localhost";
+        vncIframeEl.src = `http://${host}:6080/vnc.html?autoplay=true&reconnect=true`;
+        setVncMode(currentVncMode);
+        showToast("Screen viewer refreshed");
     });
 
     function escapeHtml(str) {
@@ -432,5 +568,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Initial Load
+    initVncUrls();
     loadSessions();
 });

@@ -7,9 +7,14 @@ Xvfb :1 -screen 0 1024x768x24 &
 export DISPLAY=:1
 sleep 2
 
-# 2. Start lightweight Openbox Window Manager
-echo "Starting Openbox window manager..."
+# 2. Start lightweight Openbox Window Manager & Desktop Panel
+echo "Starting Openbox window manager and tint2 desktop panel..."
 openbox &
+xsetroot -solid "#111827" 2>/dev/null || true
+
+if command -v tint2 >/dev/null 2>&1; then
+    tint2 &
+fi
 sleep 1
 
 # 3. Start x11vnc VNC Server on port 5900
