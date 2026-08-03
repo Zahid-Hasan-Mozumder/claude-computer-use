@@ -6,6 +6,13 @@ Includes a side-by-side control dashboard featuring a live interactive **noVNC L
 
 ---
 
+## 📹 Video Demo
+
+Watch the full project walkthrough with voice narration demonstrating session control, live noVNC desktop automation, and real-time streaming:
+▶️ **[Watch Video Demo with Voice Narration](https://drive.google.com/drive/folders/1bnMIoJXznwtnbziemlqtTBa27IFcKRen?usp=sharing)**
+
+---
+
 ## 🚀 Quick Start with Docker (Recommended)
 
 Follow these simple steps to clone the repository and run the full stack locally:
