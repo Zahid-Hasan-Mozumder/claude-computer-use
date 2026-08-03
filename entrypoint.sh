@@ -7,10 +7,11 @@ Xvfb :1 -screen 0 1024x768x24 &
 export DISPLAY=:1
 sleep 2
 
-# 2. Start lightweight Openbox Window Manager & Desktop Panel
-echo "Starting Openbox window manager and tint2 desktop panel..."
+# 2. Ensure Desktop directories exist & start Openbox Window Manager & Desktop Panel
+echo "Setting up Desktop directory and starting Openbox window manager..."
+mkdir -p ~/Desktop /root/Desktop /tmp/firefox_profiles
 openbox &
-xsetroot -solid "#111827" 2>/dev/null || true
+xsetroot -solid "#1e1e2e" 2>/dev/null || true
 
 if command -v tint2 >/dev/null 2>&1; then
     tint2 &

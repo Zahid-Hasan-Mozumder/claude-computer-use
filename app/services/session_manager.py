@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.agent.loop import sampling_loop
 from app.db.database import AsyncSessionLocal
 from app.db.models import SessionModel, MessageModel
+from app.services.display_manager import display_manager
 
 logger = logging.getLogger("session_manager")
 
@@ -25,6 +26,14 @@ class SessionManager:
     def __init__(self):
         self._sessions: Dict[str, SessionState] = {}
         self._global_lock: asyncio.Lock = asyncio.Lock()
+
+    async def get_session_workspace(self, session_id: str) -> str:
+        """Returns and ensures creation of the session workspace directory."""
+        import tempfile
+        import os
+        workspace_dir = os.path.join(tempfile.gettempdir(), "session_workspaces", session_id)
+        os.makedirs(workspace_dir, exist_ok=True)
+        return workspace_dir
 
     async def get_session_state(self, session_id: str) -> SessionState:
         """Retrieves or creates in-memory session runtime state atomically."""
@@ -121,8 +130,10 @@ class SessionManager:
                 screenshots = []
 
                 try:
+                    display_info = await display_manager.get_or_create_display(session_id)
+                    session_display = display_info.display_str
                     agent_model = db_sess.model if (db_sess and db_sess.model) else "claude-3-5-sonnet-20241022"
-                    async for event in sampling_loop(messages=anthropic_messages, model=agent_model):
+                    async for event in sampling_loop(messages=anthropic_messages, model=agent_model, display=session_display, session_id=session_id):
                         event_type = event.get("type")
 
                         await self.broadcast(session_id, event)

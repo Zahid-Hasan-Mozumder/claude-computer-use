@@ -22,19 +22,22 @@
                     </svg>
                     <span>Computer Use AI</span>
                 </div>
-                <button id="new-session-btn" class="btn btn-primary btn-sm">
+            </div>
+            
+            <div class="sidebar-section-title">TASK HISTORY</div>
+            <div id="sessions-list" class="sessions-list">
+                <!-- Session items dynamically injected -->
+                <div class="loading-spinner">Loading sessions...</div>
+            </div>
+
+            <div class="sidebar-bottom">
+                <button id="new-session-btn" class="btn btn-primary btn-full">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="12" y1="5" x2="12" y2="19"></line>
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
-                    New Session
+                    Start a New Agent Task
                 </button>
-            </div>
-            
-            <div class="sidebar-section-title">ACTIVE SESSIONS</div>
-            <div id="sessions-list" class="sessions-list">
-                <!-- Session items dynamically injected -->
-                <div class="loading-spinner">Loading sessions...</div>
             </div>
         </aside>
 
@@ -66,41 +69,9 @@
                 </div>
             </header>
 
-            <!-- Workspace Body: Split View -->
+            <!-- Workspace Body: 3-Panel Split View (Middle VNC, Right Top Chat, Right Bottom File Manager) -->
             <div class="workspace-grid">
-                <!-- Chat & Event Log Container -->
-                <section class="chat-container">
-                    <div id="chat-messages" class="chat-messages">
-                        <div class="welcome-card">
-                            <h3>🤖 Anthropic Computer Use Agent</h3>
-                            <p>Create a session to start controlling desktop environments, browsing the web, and running commands.</p>
-                        </div>
-                    </div>
-
-                    <!-- Input Box -->
-                    <div class="input-area">
-                        <form id="prompt-form" class="prompt-form">
-                            <textarea id="prompt-input" placeholder="Type instructions for the computer agent... (e.g., 'Open browser and search for weather')" rows="2" disabled></textarea>
-                            <div class="input-actions">
-                                <button type="button" id="stop-btn" class="btn btn-danger" disabled>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="6" y="6" width="12" height="12"></rect>
-                                    </svg>
-                                    Stop
-                                </button>
-                                <button type="submit" id="send-btn" class="btn btn-accent" disabled>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="22" y1="2" x2="11" y2="13"></line>
-                                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                                    </svg>
-                                    Send
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </section>
-
-                <!-- VNC / Screen Display Panel -->
+                <!-- Middle Panel: VNC / Screen Display Panel -->
                 <section class="vnc-container" id="vnc-panel">
                     <div class="vnc-header">
                         <div class="vnc-header-left">
@@ -168,6 +139,62 @@
                         </div>
                     </div>
                 </section>
+
+                <!-- Right Panel Wrapper (Top: Chat Session, Bottom: File Management) -->
+                <div class="right-panel-wrapper">
+                    <!-- Right Panel (Top): Chat & Event Log Container -->
+                    <section class="chat-container">
+                        <div id="chat-messages" class="chat-messages">
+                            <div class="welcome-card">
+                                <h3>🤖 Anthropic Computer Use Agent</h3>
+                                <p>Create a session to start controlling desktop environments, browsing the web, and running commands.</p>
+                            </div>
+                        </div>
+
+                        <!-- Input Box -->
+                        <div class="input-area">
+                            <form id="prompt-form" class="prompt-form">
+                                <textarea id="prompt-input" placeholder="Type instructions for the computer agent... (e.g., 'Search the weather in Dubai')" rows="2" disabled></textarea>
+                                <div class="input-actions">
+                                    <button type="button" id="stop-btn" class="btn btn-danger" disabled>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="6" y="6" width="12" height="12"></rect>
+                                        </svg>
+                                        Stop
+                                    </button>
+                                    <button type="submit" id="send-btn" class="btn btn-accent" disabled>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                        </svg>
+                                        Send
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+
+                    <!-- Right Panel (Bottom): File Management Panel -->
+                    <section class="file-manager-container">
+                        <div class="file-manager-header">
+                            <div class="file-manager-header-title">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                                <span>File Management</span>
+                            </div>
+                            <button id="refresh-files-btn" class="icon-btn" title="Refresh Session Workspace Files">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M23 4v6h-6"></path>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div id="file-list-wrapper" class="file-list-wrapper">
+                            <div class="file-empty-state">No workspace files generated yet for this session.</div>
+                        </div>
+                    </section>
+                </div>
             </div>
         </main>
     </div>

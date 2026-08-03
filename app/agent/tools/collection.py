@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from anthropic.types.beta import BetaToolUnionParam
 from app.agent.tools.base import BaseAnthropicTool, ToolResult, ToolError
 from app.agent.tools.computer import ComputerTool
@@ -8,9 +8,9 @@ from app.agent.tools.edit import EditTool
 class ToolCollection:
     """Collection of tools available to the Anthropic computer use agent."""
 
-    def __init__(self, tools: List[BaseAnthropicTool] = None):
+    def __init__(self, tools: List[BaseAnthropicTool] = None, display: Optional[str] = None, session_id: Optional[str] = None):
         if tools is None:
-            tools = [ComputerTool(), BashTool(), EditTool()]
+            tools = [ComputerTool(display=display), BashTool(display=display, session_id=session_id), EditTool()]
         self.tools_map: Dict[str, BaseAnthropicTool] = {tool.name: tool for tool in tools}
 
     def to_params(self) -> List[BetaToolUnionParam]:

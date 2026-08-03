@@ -8,13 +8,16 @@ from fastapi.responses import FileResponse
 from app.core.config import settings
 from app.db.database import init_db
 from app.api.v1.sessions import router as sessions_router
-from app.api.v1.sessions import websocket_session_stream
+from app.api.v1.sessions import websocket_session_stream, websocket_vnc_proxy
+from app.services.display_manager import display_manager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize database tables on startup
     await init_db()
     yield
+    # Cleanup virtual X displays and VNC servers on shutdown
+    await display_manager.cleanup_all()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -35,8 +38,9 @@ app.add_middleware(
 # Include API Routers
 app.include_router(sessions_router, prefix=settings.API_V1_STR)
 
-# Register websocket under /ws/sessions/{session_id} directly if needed
+# Register websockets directly under /ws/sessions/{session_id} and /ws/sessions/{session_id}/vnc
 app.add_api_websocket_route("/ws/sessions/{session_id}", websocket_session_stream)
+app.add_api_websocket_route("/ws/sessions/{session_id}/vnc", websocket_vnc_proxy)
 
 @app.get("/health", tags=["System"])
 def health_check():
@@ -46,6 +50,11 @@ def health_check():
 static_dir = os.path.join(os.path.dirname(__file__), "app", "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+# Mount noVNC static directory if present (e.g. inside Docker container)
+novnc_dir = "/usr/share/novnc"
+if os.path.exists(novnc_dir):
+    app.mount("/novnc", StaticFiles(directory=novnc_dir), name="novnc")
 
 
 @app.get("/", tags=["System"])
