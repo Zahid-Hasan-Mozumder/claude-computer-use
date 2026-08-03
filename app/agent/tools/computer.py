@@ -27,10 +27,10 @@ ActionType = Literal[
 class ComputerTool(BaseAnthropicTool):
     """Tool for controlling desktop environment (mouse, keyboard, screenshot)."""
 
-    def __init__(self, display_width: int = 1024, display_height: int = 768):
+    def __init__(self, display_width: int = 1024, display_height: int = 768, display: Optional[str] = None):
         self.width = display_width
         self.height = display_height
-        self.display = settings.DISPLAY
+        self.display = display or settings.DISPLAY
 
     @property
     def name(self) -> str:

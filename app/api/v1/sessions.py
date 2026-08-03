@@ -1,8 +1,9 @@
 import asyncio
 import json
+import os
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -17,6 +18,7 @@ from app.db.schemas import (
     UserPromptRequest,
 )
 from app.services.session_manager import session_manager
+from app.services.display_manager import display_manager
 
 router = APIRouter(prefix="/sessions", tags=["Sessions"])
 
@@ -64,6 +66,9 @@ async def delete_session(session_id: str, db: AsyncSession = Depends(get_db)):
     
     # Interrupt task if running
     await session_manager.stop_session_task(session_id)
+
+    # Release virtual X display & VNC resources
+    await display_manager.release_display(session_id)
 
     await db.delete(sess)
     await db.commit()
@@ -114,6 +119,56 @@ async def stop_session_message(session_id: str, db: AsyncSession = Depends(get_d
         return {"status": "success", "message": "Task execution interrupted."}
     return {"status": "idle", "message": "No active task was running for this session."}
 
+@router.get("/{session_id}/files")
+async def list_session_files(session_id: str, db: AsyncSession = Depends(get_db)):
+    """Lists generated/output files in the session workspace."""
+    stmt = select(SessionModel).where(SessionModel.id == session_id)
+    res = await db.execute(stmt)
+    sess = res.scalar_one_or_none()
+    if not sess:
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
+
+    workspace_dir = await session_manager.get_session_workspace(session_id)
+    file_list = []
+    if os.path.exists(workspace_dir):
+        for root, dirs, files in os.walk(workspace_dir):
+            for file in files:
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, workspace_dir)
+                stat = os.stat(full_path)
+                file_list.append({
+                    "name": file,
+                    "path": rel_path,
+                    "size_bytes": stat.st_size,
+                    "modified_at": stat.st_mtime
+                })
+    return {"session_id": session_id, "files": file_list}
+
+@router.get("/{session_id}/files/download")
+async def download_session_file(
+    session_id: str,
+    filepath: str = Query(..., description="Relative path of file in workspace"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Downloads a file from the session workspace."""
+    stmt = select(SessionModel).where(SessionModel.id == session_id)
+    res = await db.execute(stmt)
+    sess = res.scalar_one_or_none()
+    if not sess:
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
+
+    workspace_dir = await session_manager.get_session_workspace(session_id)
+    target_path = os.path.abspath(os.path.join(workspace_dir, filepath))
+
+    # Prevent path traversal outside workspace_dir
+    if not target_path.startswith(os.path.abspath(workspace_dir)):
+        raise HTTPException(status_code=400, detail="Invalid file path.")
+
+    if not os.path.exists(target_path) or not os.path.isfile(target_path):
+        raise HTTPException(status_code=404, detail=f"File '{filepath}' not found.")
+
+    return FileResponse(path=target_path, filename=os.path.basename(target_path))
+
 # --- Real-Time Streaming Endpoints ---
 
 @router.websocket("/ws/{session_id}")
@@ -157,3 +212,54 @@ async def sse_session_stream(session_id: str):
             await session_manager.unsubscribe(session_id, queue)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@router.websocket("/{session_id}/vnc")
+async def websocket_vnc_proxy(websocket: WebSocket, session_id: str):
+    """WebSocket proxy endpoint connecting browser noVNC client to session-isolated VNC RFB port."""
+    await websocket.accept()
+    
+    display_info = await display_manager.get_or_create_display(session_id)
+    vnc_port = display_info.vnc_port
+
+    try:
+        reader, writer = await asyncio.open_connection("127.0.0.1", vnc_port)
+    except Exception as e:
+        await websocket.close(code=1011, reason=f"Failed to connect to VNC port {vnc_port}: {str(e)}")
+        return
+
+    async def ws_to_tcp():
+        try:
+            while True:
+                data = await websocket.receive_bytes()
+                writer.write(data)
+                await writer.drain()
+        except (WebSocketDisconnect, asyncio.CancelledError):
+            pass
+        except Exception:
+            pass
+
+    async def tcp_to_ws():
+        try:
+            while True:
+                data = await reader.read(4096)
+                if not data:
+                    break
+                await websocket.send_bytes(data)
+        except (WebSocketDisconnect, asyncio.CancelledError):
+            pass
+        except Exception:
+            pass
+
+    t1 = asyncio.create_task(ws_to_tcp())
+    t2 = asyncio.create_task(tcp_to_ws())
+
+    done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
+    for t in pending:
+        t.cancel()
+
+    writer.close()
+    try:
+        await writer.wait_closed()
+    except Exception:
+        pass
+

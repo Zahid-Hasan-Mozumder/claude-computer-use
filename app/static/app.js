@@ -42,9 +42,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const lightboxCaptionEl = document.getElementById("lightbox-caption");
     const lightboxCloseBtnEl = document.getElementById("lightbox-close-btn");
 
-    // Check if noVNC on port 6080 is reachable
+    // File Manager Elements
+    const refreshFilesBtnEl = document.getElementById("refresh-files-btn");
+    const fileListWrapperEl = document.getElementById("file-list-wrapper");
+
+    // Check if noVNC frontend static files or server is reachable
     async function checkVncAvailability() {
         const host = window.location.hostname || "localhost";
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 1000);
+            const res = await fetch("/novnc/vnc.html", { method: "HEAD", signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (res.ok) return true;
+        } catch (e) {}
+
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 1000);
@@ -56,17 +68,35 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Configure noVNC URL based on host and availability
-    async function initVncUrls() {
+    // Configure per-session noVNC URL
+    async function updateVncUrlForSession(sessionId) {
+        if (!sessionId) return;
         const host = window.location.hostname || "localhost";
-        const vncUrl = `http://${host}:6080/vnc.html?autoconnect=true&reconnect=true&resize=scale`;
+        const port = window.location.port || (window.location.protocol === "https:" ? "443" : "8000");
+        const wsPath = `ws/sessions/${sessionId}/vnc`;
+        
+        let novncPath = `/novnc/vnc.html`;
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 800);
+            const res = await fetch("/novnc/vnc.html", { method: "HEAD", signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (!res.ok) novncPath = `http://${host}:6080/vnc.html`;
+        } catch (e) {
+            novncPath = `http://${host}:6080/vnc.html`;
+        }
+
+        const vncUrl = `${novncPath}?host=${host}&port=${port}&path=${wsPath}&autoconnect=true&reconnect=true&resize=scale`;
+        
         if (vncIframeEl) {
             vncIframeEl.src = vncUrl;
         }
         if (popoutVncBtnEl) {
             popoutVncBtnEl.href = vncUrl;
         }
+    }
 
+    async function initVncUrls() {
         const isVncUp = await checkVncAvailability();
         if (isVncUp) {
             setVncMode("live");
@@ -194,8 +224,67 @@ document.addEventListener("DOMContentLoaded", () => {
         // Load Message History
         await loadMessageHistory(sessionId);
 
+        // Update noVNC Desktop Viewer stream for this session
+        updateVncUrlForSession(sessionId);
+
+        // Load Session Workspace Files
+        loadSessionFiles(sessionId);
+
         // Connect WebSocket for real-time streaming
         connectWebSocket(sessionId);
+    }
+
+    async function loadSessionFiles(sessionId) {
+        if (!sessionId || !fileListWrapperEl) return;
+        try {
+            const res = await fetch(`/api/v1/sessions/${sessionId}/files`);
+            if (!res.ok) return;
+            const data = await res.json();
+            renderFileList(data.files || []);
+        } catch (err) {
+            console.error("Failed to load session files:", err);
+        }
+    }
+
+    function renderFileList(files) {
+        if (!fileListWrapperEl) return;
+        fileListWrapperEl.innerHTML = "";
+        if (!files || files.length === 0) {
+            fileListWrapperEl.innerHTML = `<div class="file-empty-state">No workspace files generated yet for this session.</div>`;
+            return;
+        }
+
+        files.forEach(f => {
+            const item = document.createElement("div");
+            item.className = "file-item";
+            
+            const formatSize = (bytes) => {
+                if (bytes < 1024) return bytes + ' B';
+                if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+                return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            };
+
+            item.innerHTML = `
+                <div class="file-item-info">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                        <polyline points="13 2 13 9 20 9"></polyline>
+                    </svg>
+                    <div class="file-item-name" title="${escapeHtml(f.path)}">${escapeHtml(f.name)}</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span class="file-item-size">${formatSize(f.size_bytes)}</span>
+                    <a href="/api/v1/sessions/${activeSessionId}/files/download?filepath=${encodeURIComponent(f.path)}" target="_blank" class="icon-btn" title="Download File">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                    </a>
+                </div>
+            `;
+            fileListWrapperEl.appendChild(item);
+        });
     }
 
     async function loadMessageHistory(sessionId) {
@@ -556,11 +645,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     refreshVncBtnEl.addEventListener("click", () => {
-        const host = window.location.hostname || "localhost";
-        vncIframeEl.src = `http://${host}:6080/vnc.html?autoplay=true&reconnect=true`;
+        if (activeSessionId) {
+            updateVncUrlForSession(activeSessionId);
+        }
         setVncMode(currentVncMode);
         showToast("Screen viewer refreshed");
     });
+
+    if (refreshFilesBtnEl) {
+        refreshFilesBtnEl.addEventListener("click", () => {
+            if (activeSessionId) {
+                loadSessionFiles(activeSessionId);
+                showToast("Workspace files refreshed");
+            }
+        });
+    }
 
     function escapeHtml(str) {
         if (!str) return "";

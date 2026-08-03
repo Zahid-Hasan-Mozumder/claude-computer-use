@@ -14,8 +14,9 @@ ThinkingEffort = Literal["low", "medium", "high", "max"]
 SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITY>
 * You are controlling an Ubuntu virtual machine using {platform.machine()} architecture with internet access.
 * You can feel free to install Ubuntu applications with your bash tool. Use curl instead of wget.
-* To open firefox, please click on the firefox icon or launch via bash. Note: firefox-esr is installed.
-* Using bash tool you can start GUI applications, but set export DISPLAY=:1 and use a subshell: "(DISPLAY=:1 xterm &)".
+* To open the web browser or perform web searches, launch Firefox via bash tool using "firefox-esr &". Firefox is the default web browser on this system. Multiple sessions run concurrently with isolated browser profiles on the same desktop.
+* Using bash tool you can start GUI applications. The DISPLAY environment variable is pre-configured. Do NOT set export DISPLAY, do NOT prefix commands with DISPLAY=, and do NOT use DISPLAY subshells. Run GUI commands directly (e.g. "firefox-esr &" or "xterm &").
+* Save downloaded files and images directly to ~/Desktop or /root/Desktop so they are visible on the desktop.
 * Take a screenshot after executing GUI actions or completing a segment to analyze the screen state.
 * When viewing a page it can be helpful to zoom out so that you can see everything on the page.
 * The current date is {datetime.today().strftime("%A, %B %d, %Y")}.
@@ -39,6 +40,8 @@ async def sampling_loop(
     api_key: Optional[str] = None,
     model: str = "claude-3-5-sonnet-latest",
     tools: Optional[ToolCollection] = None,
+    display: Optional[str] = None,
+    session_id: Optional[str] = None,
     max_tokens: int = 4096,
     max_steps: int = 15,
     thinking_mode: ThinkingMode = "off",
@@ -55,7 +58,7 @@ async def sampling_loop(
         return
 
     client = AsyncAnthropic(api_key=key)
-    tool_collection = tools or ToolCollection()
+    tool_collection = tools or ToolCollection(display=display, session_id=session_id)
     tool_params = tool_collection.to_params()
 
     current_messages = list(messages)
