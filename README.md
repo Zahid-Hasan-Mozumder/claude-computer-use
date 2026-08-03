@@ -9,7 +9,7 @@ Includes a side-by-side control dashboard featuring a live interactive **noVNC L
 ## 📹 Video Demo
 
 Watch the full project walkthrough with voice narration demonstrating session control, live noVNC desktop automation, and real-time streaming:
-▶️ **[Watch Video Demo with Voice Narration](https://drive.google.com/drive/folders/1bnMIoJXznwtnbziemlqtTBa27IFcKRen?usp=sharing)**
+▶️ **[Watch Video Demo with Voice Narration](https://drive.google.com/file/d/1Da5HPH-8Sle4pdkTjWZw5l6DCPCvjxpq/view?usp=drive_link)**
 
 ---
 
