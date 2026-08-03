@@ -12,6 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     scrot \
     x11vnc \
     openbox \
+    tint2 \
+    feh \
+    xterm \
+    firefox-esr \
     novnc \
     websockify \
     net-tools \
@@ -19,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libpq-dev \
     gcc \
+    x11-xserver-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -36,7 +41,7 @@ RUN uv pip install --system .
 
 # Copy entrypoint script
 COPY entrypoint.sh ./
-RUN chmod +x entrypoint.sh
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
 
 # Expose FastAPI (8000), noVNC (6080), RFB VNC (5900)
 EXPOSE 8000 6080 5900
